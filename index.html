@@ -143,6 +143,7 @@ select { font: inherit; padding: 6px 10px; border-radius: 999px; border: 1px sol
 <script>
 (() => {
   const ENDPOINT = (window.VOTE_CONFIG || {}).endpoint || "";
+  const FIELD = (window.VOTE_CONFIG || {}).field || "";
   const $ = (id) => document.getElementById(id);
   const KEY = "lullaspin-vote-v1";
   const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
@@ -178,17 +179,19 @@ select { font: inherit; padding: 6px 10px; border-radius: 999px; border: 1px sol
 
   function setStatus(text, kind) { const s = $("status"); s.textContent = text; s.className = "status " + (kind || ""); }
 
-  // Results go to a Google Sheet through an Apps Script web app. "no-cors" means we can't read the
-  // reply, so a row leaves the outbox once the request itself went out; failures stay and retry.
+  // Results go to a Google Form whose responses fill a linked Sheet (one JSON payload per send).
+  // "no-cors" means we can't read the reply, so rows leave the outbox once the request went out;
+  // network failures keep them for the next try.
   let sending = false;
   async function flush() {
     if (!ENDPOINT) { setStatus("결과 저장 주소가 아직 설정되지 않아 이 기기에만 저장돼요", "warn"); return; }
     if (sending || !st.outbox.length) return;
     sending = true;
-    const rows = st.outbox.slice(0, 50);
+    const rows = st.outbox.slice(0, 20);
     try {
-      await fetch(ENDPOINT, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ tester: st.tester, name: st.name || "", group: st.group || "", rows }) });
+      const body = new URLSearchParams();
+      body.set(FIELD, JSON.stringify({ tester: st.tester, name: st.name || "", group: st.group || "", rows }));
+      await fetch(ENDPOINT, { method: "POST", mode: "no-cors", body });
       st.outbox.splice(0, rows.length); save();
       setStatus(st.outbox.length ? "보내는 중…" : "저장됨", "ok");
     } catch {
